@@ -1,0 +1,29 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Old files
+archive1
+archive2
+
+# Big data files folder
+qdrant_storage/*
+qdrant_storage2/*
+data/*
+
+*.xlsx
+*.parquet
+
+# Secrets
+.env
+
+
+# Test files
+test.py
