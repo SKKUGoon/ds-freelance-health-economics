@@ -24,6 +24,15 @@ data/*
 # Secrets
 .env
 
+# Checkpoint models
+/notebooks/checkpoints/*
 
 # Test files
 test.py
+
+# Past files
+archive_data/
+archive_research1/
+archive_research2/
+qdrant_storage/
+qdrant_storage2/
