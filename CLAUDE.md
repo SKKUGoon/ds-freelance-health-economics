@@ -34,14 +34,14 @@ Targets are split into density buckets by nonzero rate:
 
 ### Stage 2 Modes
 
-Stage 2 training is dispatched by `cfg.stage2_mode` through `stage2.py`:
+Stage 2 training is dispatched by `cfg.stage2_mode` through the `_training/stage2/` package:
 
 | Mode | File | Description |
 |------|------|-------------|
-| `ts_latent` (default) | `_training/ts_latent.py` | Latent rollout only |
-| `ts_supply_ts_latent` | `_training/ts_supply_ts_latent.py` | Supply-history augmented encoder + latent rollout |
+| `baseline` (default) | `_training/stage2/stage2_test_baseline.py` | Latent rollout only |
+| `supply_history_latent` | `_training/stage2/stage2_test_supply_history_latent.py` | Supply-history augmented encoder + latent rollout |
 
-**Config constraint:** `stage2_mode="ts_supply_ts_latent"` requires `use_supply_history=True` (enforced at config construction via pydantic `model_validator`).
+**Config constraint:** `stage2_mode="supply_history_latent"` requires `use_supply_history=True` (enforced at config construction via pydantic `model_validator`).
 
 ## Data Shapes
 
@@ -92,7 +92,7 @@ df = results.to_dataframe()
 ### Supply-augmented mode example
 
 ```python
-cfg = LAVARConfig(stage2_mode="ts_supply_ts_latent", use_supply_history=True,
+cfg = LAVARConfig(stage2_mode="supply_history_latent", use_supply_history=True,
                   device="cpu", epochs_lavar=2, epochs_supply=2)
 model = LAVARForecaster(cfg)
 model.fit(X, y)
@@ -127,9 +127,11 @@ lavar/
 │   └── scaler.py        # StandardScalerTorch
 └── _training/
     ├── stage1.py            # train_lavar()
-    ├── stage2.py            # train_supply_heads() dispatcher, density splitting
-    ├── ts_latent.py         # ts_latent mode training loop
-    └── ts_supply_ts_latent.py # ts_supply_ts_latent mode training loop
+    └── stage2/
+        ├── __init__.py                        # train_supply_heads() dispatcher
+        ├── common.py                          # density splitting utilities
+        ├── stage2_test_baseline.py            # baseline mode training loop
+        └── stage2_test_supply_history_latent.py # supply_history_latent mode training loop
 ```
 
 ## Dev Workflow

@@ -32,7 +32,7 @@ Pydantic model. All fields have defaults. Key fields:
 | `decoder_hidden` | `List[int]` | `[16, 32]` | Decoder MLP layers |
 | `use_supply_history` | `bool` | `False` | Concatenate y to encoder input |
 | `stage1_use_supply_history` | `bool` | `False` | Stage 1 encoder augmentation toggle |
-| `stage2_mode` | `"ts_latent"\|"ts_supply_ts_latent"` | `"ts_latent"` | Stage 2 training mode |
+| `stage2_mode` | `"baseline"\|"supply_history_latent"` | `"baseline"` | Stage 2 training mode |
 | `stage2_use_explicit_lag_coeff` | `bool` | `False` | Experiment: explicit lag coefficients |
 | `epochs_lavar` | `int` | `100` | Stage 1 training epochs |
 | `epochs_supply` | `int` | `100` | Stage 2 training epochs |
@@ -114,14 +114,14 @@ Augmented input dim when `use_supply_history=True`: `Dx + Dy`.
 
 ## Stage 2 Modes
 
-Stage 2 training is dispatched by `cfg.stage2_mode` through `stage2.py`:
+Stage 2 training is dispatched by `cfg.stage2_mode` through the `_training/stage2/` package:
 
 | Mode | File | Description |
 |------|------|-------------|
-| `ts_latent` (default) | `ts_latent.py` | Latent rollout only |
-| `ts_supply_ts_latent` | `ts_supply_ts_latent.py` | Supply-history augmented encoder + latent rollout |
+| `baseline` (default) | `stage2/stage2_test_baseline.py` | Latent rollout only |
+| `supply_history_latent` | `stage2/stage2_test_supply_history_latent.py` | Supply-history augmented encoder + latent rollout |
 
-**Config constraint:** `stage2_mode="ts_supply_ts_latent"` requires `use_supply_history=True`. This is enforced by a pydantic `model_validator` at config construction time.
+**Config constraint:** `stage2_mode="supply_history_latent"` requires `use_supply_history=True`. This is enforced by a pydantic `model_validator` at config construction time.
 
 **Experiment flag:** `stage2_use_explicit_lag_coeff` (default `False`) is reserved for future explicit lag-coefficient experiments. No consumer exists yet.
 
@@ -157,7 +157,9 @@ lavar/
 │   └── scaler.py          # StandardScalerTorch
 └── _training/
     ├── stage1.py              # train_lavar()
-    ├── stage2.py              # train_supply_heads() dispatcher, density splitting
-    ├── ts_latent.py           # ts_latent mode training loop
-    └── ts_supply_ts_latent.py # ts_supply_ts_latent mode training loop
+    └── stage2/
+        ├── __init__.py                        # train_supply_heads() dispatcher
+        ├── common.py                          # density splitting utilities
+        ├── stage2_test_baseline.py            # baseline mode training loop
+        └── stage2_test_supply_history_latent.py # supply_history_latent mode training loop
 ```

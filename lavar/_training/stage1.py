@@ -14,7 +14,7 @@ import torch
 from torch.utils.data import DataLoader
 from lavar.config import LAVARConfig
 from lavar._core.model import LAVAR
-from lavar._core.dynamics import VARDynamics
+from lavar._core.dynamics import VARDynamics, GRUDynamics
 
 
 def train_lavar(
@@ -32,10 +32,13 @@ def train_lavar(
     if model.transition_order != cfg.dyn_p:
         print(
             f"[stage1] Adjusting LAVAR.transition_order from {model.transition_order} to cfg.p={cfg.dyn_p} "
-            f"(re-initializing VAR dynamics parameters)."
+            f"(re-initializing dynamics parameters)."
         )
         model.transition_order = cfg.dyn_p
-        model.dynamics = VARDynamics(model.latent_dim, cfg.dyn_p).to(device)
+        if cfg.latent_dynamics_type == "gru":
+            model.dynamics = GRUDynamics(model.latent_dim, cfg.dyn_p, cfg.dynamics_gru_hidden_dim).to(device)
+        else:
+            model.dynamics = VARDynamics(model.latent_dim, cfg.dyn_p).to(device)
 
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr_lavar)
 

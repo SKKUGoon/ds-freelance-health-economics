@@ -161,3 +161,41 @@ class SupplyHeadMSE(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
+
+
+class SupplyHeadGRU(nn.Module):
+    """
+    GRU-based sequential decoder for delta-MSE training.
+
+    Unlike SupplyHeadMSE which maps each horizon step independently,
+    this head processes the full latent trajectory z_{1:H} as a sequence.
+    Each step's prediction conditions on all prior steps via GRU hidden state.
+
+    Input:  (B, H, latent_dim) — full latent trajectory
+    Output: (B, H, output_dim) — delta predictions per horizon step
+    """
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        gru_hidden_dim: int = 32,
+        num_layers: int = 1,
+        dropout: float = 0.0,
+    ):
+        super().__init__()
+        self.gru = nn.GRU(
+            input_size=input_dim,
+            hidden_size=gru_hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0,
+        )
+        self.projection = nn.Linear(gru_hidden_dim, output_dim)
+
+    def forward(self, z_seq: torch.Tensor) -> torch.Tensor:
+        """
+        z_seq: (B, H, input_dim)
+        returns: (B, H, output_dim)
+        """
+        h_seq, _ = self.gru(z_seq)  # (B, H, gru_hidden_dim)
+        return self.projection(h_seq)  # (B, H, output_dim)

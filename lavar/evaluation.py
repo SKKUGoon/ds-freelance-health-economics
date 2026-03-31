@@ -14,7 +14,7 @@ from lavar._core.model import LAVAR
 from lavar._data.dataset import RollingXYDataset, RollingXYDatasetWithY0
 from lavar._data.scaler import StandardScalerTorch
 from lavar._training.stage1 import train_lavar
-from lavar._training.stage2 import train_supply_heads
+from lavar._training.stage2 import train_supply_heads  # noqa: stage2 is now a package
 from lavar.forecaster import LAVARForecaster
 
 

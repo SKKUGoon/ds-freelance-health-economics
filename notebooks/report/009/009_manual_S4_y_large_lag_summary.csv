@@ -1,0 +1,2 @@
+mode,run_type,n_folds,target_granularity,aux_source,lag_window,mollified,mean_mse,median_mse,mean_skill,median_skill
+S4_y_large_lag,manual,130,drug,y_large_history,1..14,False,276.9933049275325,57.64360237121582,-6.018605853657327,-0.0025958786232749276

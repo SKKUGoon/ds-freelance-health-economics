@@ -6,7 +6,7 @@ from typing import List, Literal
 
 class LAVARConfig(BaseModel):
     device: Literal["cpu", "mps", "cuda"] = Field(
-        default="cpu", description="Device to use for training"
+        default="mps", description="Device to use for training"
     )
     num_workers: int = 0
 
@@ -25,8 +25,11 @@ class LAVARConfig(BaseModel):
 
     # stage 1 (LAVAR + VAR Dynamics)
     latent_dim: int = 8
+    latent_dynamics_type: Literal["var", "gru"] = "var"
+    dynamics_gru_hidden_dim: int = 32
     encoder_hidden: List[int] = [32, 16]
     decoder_hidden: List[int] = [16, 32]
+    encoder_dropout: float = 0.0
     lr_lavar: float = 1e-3
     epochs_lavar: int = 100
     lambda_dyn: float = 1.0  # weight for latent dynamics loss
@@ -46,10 +49,21 @@ class LAVARConfig(BaseModel):
     #   - dense:        nonzero_rate >= dense_nonzero_rate_thr
     #   - ultra_sparse: nonzero_rate <= ultra_nonzero_rate_thr
     #   - sparse:       otherwise
-    stage2_mode: Literal["ts_latent", "ts_supply_ts_latent"] = "ts_latent"
+    stage2_mode: Literal["baseline", "supply_history_latent"] = "baseline"
     stage2_use_explicit_lag_coeff: bool = False
+    stage2_head_type: Literal["mlp", "gru"] = "mlp"
+    stage2_delta_nonneg_mode: Literal["clamp", "softplus", "softplus_annealed"] = (
+        "clamp"
+    )
+    stage2_softplus_beta_start: float = 1.0
+    stage2_softplus_beta_end: float = 8.0
     supply_hidden: List[int] = []
+    gru_hidden_dim: int = 32
+    gru_num_layers: int = 1
+    gru_dropout: float = 0.0
+    horizon_loss_weight: Literal["uniform", "linear"] = "uniform"
     lr_supply: float = 1e-3
+    weight_decay_supply: float = 0.0
     epochs_supply: int = 100
     early_stop_patience_supply: int | None = 20
     dense_nonzero_rate_thr: float = 0.70
@@ -60,21 +74,24 @@ class LAVARConfig(BaseModel):
     pred_guardrail_multiplier: float = 2.0
     pred_guardrail_min_upper: float = 1.0
     forecast_round_to_int: bool = True
+    zero_gate_k: int = 7
 
     @model_validator(mode="after")
     def _validate_stage2_mode(self) -> "LAVARConfig":
-        if self.stage2_mode == "ts_supply_ts_latent" and not self.use_supply_history:
+        if self.stage2_mode == "supply_history_latent" and not self.use_supply_history:
             raise ValueError(
-                "stage2_mode='ts_supply_ts_latent' requires use_supply_history=True."
+                "stage2_mode='supply_history_latent' requires use_supply_history=True."
             )
         if (
-            self.stage2_mode == "ts_supply_ts_latent"
+            self.stage2_mode == "supply_history_latent"
             and not self.stage1_use_supply_history
         ):
             raise ValueError(
-                "Current ts_supply_ts_latent path requires stage1_use_supply_history=True "
+                "supply_history_latent mode requires stage1_use_supply_history=True "
                 "because LAVAR encoder input dim is fixed at Stage 1 training time."
             )
+        if self.stage2_softplus_beta_start <= 0 or self.stage2_softplus_beta_end <= 0:
+            raise ValueError("stage2 softplus beta values must be positive.")
         return self
 
     @classmethod

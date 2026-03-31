@@ -49,3 +49,34 @@ class VARDynamics(nn.Module):
         if self.c is not None:
             z = z + self.c  # broadcast (k,) -> (B,k)
         return z
+
+
+class GRUDynamics(nn.Module):
+    """
+    Nonlinear GRU-based latent dynamics.
+
+    Same interface as VARDynamics:
+      forward(z_history: (B, p, k)) -> (B, k)
+
+    Replaces the linear VAR(p) transition with a GRU that processes
+    the full latent history and projects to the next latent state.
+    """
+    def __init__(self, latent_dim: int, order: int, hidden_dim: int = 32):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.order = order
+        self.gru = nn.GRU(
+            input_size=latent_dim,
+            hidden_size=hidden_dim,
+            num_layers=1,
+            batch_first=True,
+        )
+        self.projection = nn.Linear(hidden_dim, latent_dim)
+
+    def forward(self, z_history: torch.Tensor) -> torch.Tensor:
+        """
+        z_history: (B, p, k)
+        return:    (B, k)
+        """
+        _, h_n = self.gru(z_history)  # h_n: (1, B, hidden_dim)
+        return self.projection(h_n.squeeze(0))  # (B, k)

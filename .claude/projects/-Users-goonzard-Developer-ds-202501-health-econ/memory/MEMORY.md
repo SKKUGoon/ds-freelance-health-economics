@@ -1,0 +1,1 @@
+- [Write plan first](feedback_write_plan_first.md) — always present implementation plan before editing code

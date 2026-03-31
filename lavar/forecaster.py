@@ -7,11 +7,11 @@ import torch
 from torch.utils.data import DataLoader
 
 from lavar.config import LAVARConfig
-from lavar._core.model import LAVAR, LAVARWithSupply
+from lavar._core.model import LAVAR, LAVARWithSupply, LAVARWithSupplyGRU
 from lavar._data.dataset import RollingXYDataset, RollingXYDatasetWithY0
 from lavar._data.scaler import StandardScalerTorch
 from lavar._training.stage1 import train_lavar
-from lavar._training.stage2 import train_supply_heads
+from lavar._training.stage2 import train_supply_heads  # noqa: stage2 is now a package
 
 
 class LAVARForecaster:
@@ -102,6 +102,9 @@ class LAVARForecaster:
             transition_order=cfg.dyn_p,
             encoder_hidden_dims=cfg.encoder_hidden,
             decoder_hidden_dims=cfg.decoder_hidden,
+            dynamics_type=cfg.latent_dynamics_type,
+            dynamics_gru_hidden_dim=cfg.dynamics_gru_hidden_dim,
+            encoder_dropout=cfg.encoder_dropout,
         )
 
         s1_train, s1_val = self._build_stage1_loaders(
@@ -219,6 +222,15 @@ class LAVARForecaster:
 
         # Guardrails
         y_hat_full, _ = self._sanitize_predictions(y_hat_full, y0_raw)
+
+        # Zero gating: clamp predictions for targets with zero recent history
+        zero_gate_k = getattr(cfg, "zero_gate_k", 0)
+        if zero_gate_k > 0 and y_recent is not None:
+            y_recent_t = self._to_tensor(y_recent).to(dev)
+            k = min(zero_gate_k, y_recent_t.shape[0])
+            recent_sum = y_recent_t[-k:].sum(dim=0)  # (Dy,)
+            zero_mask = (recent_sum == 0)  # (Dy,) bool
+            y_hat_full[:, zero_mask] = 0.0
 
         if cfg.forecast_round_to_int:
             y_hat_full = torch.round(y_hat_full)
@@ -498,15 +510,39 @@ class LAVARForecaster:
         indices: List[int],
         cfg: LAVARConfig,
         head_type: str,
-    ) -> Optional[LAVARWithSupply]:
+    ) -> Optional[LAVARWithSupply | LAVARWithSupplyGRU]:
         if state_dict is None or lavar is None or len(indices) == 0:
             return None
-        model = LAVARWithSupply(
-            lavar=lavar,
-            supply_dim=len(indices),
-            horizon=cfg.horizon,
-            supply_hidden=cfg.supply_hidden,
-            supply_head_type=head_type,
+
+        use_gru = (
+            getattr(cfg, "stage2_head_type", "mlp") == "gru"
+            and head_type == "delta_mse"
         )
+
+        if use_gru:
+            model = LAVARWithSupplyGRU(
+                lavar=lavar,
+                supply_dim=len(indices),
+                horizon=cfg.horizon,
+                gru_hidden_dim=cfg.gru_hidden_dim,
+                gru_num_layers=cfg.gru_num_layers,
+                gru_dropout=cfg.gru_dropout,
+            )
+        else:
+            model = LAVARWithSupply(
+                lavar=lavar,
+                supply_dim=len(indices),
+                horizon=cfg.horizon,
+                supply_hidden=cfg.supply_hidden,
+                supply_head_type=head_type,
+            )
+
+        if head_type == "delta_mse":
+            model.set_delta_nonneg_mode(
+                getattr(cfg, "stage2_delta_nonneg_mode", "clamp")
+            )
+            model.set_softplus_beta(
+                float(getattr(cfg, "stage2_softplus_beta_end", 8.0))
+            )
         model.load_state_dict(state_dict)
         return model
