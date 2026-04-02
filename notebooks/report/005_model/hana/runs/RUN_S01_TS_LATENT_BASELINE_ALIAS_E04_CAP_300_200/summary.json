@@ -1,0 +1,16 @@
+{
+  "mean_mse": 8.985634149954869,
+  "median_mse": 5.105654954910278,
+  "mean_mae": 0.864846610564452,
+  "median_mae": 0.7589285671710968,
+  "mean_skill": -0.7160960165975513,
+  "median_skill": -0.022769320291646133,
+  "n_folds": 130,
+  "run_id": "RUN_S01_TS_LATENT_BASELINE_ALIAS_E04_CAP_300_200",
+  "created_at": "2026-03-31T17:45:28.827943",
+  "device": "mps",
+  "horizon": 14,
+  "fold_step": 14,
+  "lavar_retrain_cadence": 90,
+  "quality_triggers": true
+}

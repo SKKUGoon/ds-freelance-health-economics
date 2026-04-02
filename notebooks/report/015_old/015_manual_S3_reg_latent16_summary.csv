@@ -1,2 +1,0 @@
-mode,run_type,n_folds,mean_mse,median_mse,mean_skill,median_skill
-S3_reg_latent16,manual,130,62.334512307093696,49.42633819580078,0.057485106210192864,0.10239969336733079

@@ -1,0 +1,2 @@
+mode,run_type,n_folds,target_granularity,aux_source,mean_mse,median_mse,mean_skill,median_skill
+S3_gru_ylarge_lag,manual,130,drug,y_large_lag,67.56049646230845,55.8288688659668,-0.054851956644810115,0.0037318957374745665

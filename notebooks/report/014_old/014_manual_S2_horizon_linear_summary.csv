@@ -1,2 +1,0 @@
-mode,run_type,n_folds,mean_mse,median_mse,mean_skill,median_skill
-S2_horizon_linear,manual,130,63.116300289447494,51.41815376281738,0.03143229307367159,0.06392578583067626

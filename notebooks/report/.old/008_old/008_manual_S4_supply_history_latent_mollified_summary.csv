@@ -1,0 +1,2 @@
+mode,run_type,n_folds,target_granularity,aux_source,mean_mse,median_mse,mean_skill,median_skill
+S4_supply_history_latent_mollified,manual,130,drug,none,241.9089171042809,63.59747123718262,-2.450763693591767,-0.29919588212230463

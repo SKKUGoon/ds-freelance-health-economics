@@ -1,0 +1,16 @@
+{
+  "mean_mse": 6.131295778201177,
+  "median_mse": 4.404017925262451,
+  "mean_mae": 0.8043498153869922,
+  "median_mae": 0.7291666567325592,
+  "mean_skill": 0.03267404919044424,
+  "median_skill": 0.0215056778300195,
+  "n_folds": 130,
+  "run_id": "RUN_S15_GRU_LATENT_DYNAMICS_E02_CAP_200_200",
+  "created_at": "2026-04-01T01:30:24.835720",
+  "device": "mps",
+  "horizon": 14,
+  "fold_step": 14,
+  "lavar_retrain_cadence": 90,
+  "quality_triggers": true
+}

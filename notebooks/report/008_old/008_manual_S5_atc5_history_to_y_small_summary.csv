@@ -1,2 +1,0 @@
-mode,run_type,n_folds,target_granularity,aux_source,mean_mse,median_mse,mean_skill,median_skill
-S5_atc5_history_to_y_small,manual,130,drug,atc5_history,477.166866507897,55.0543155670166,-7.963415769243695,0.0

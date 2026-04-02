@@ -1,0 +1,2 @@
+mode,run_type,n_folds,target_granularity,aux_source,mean_mse,median_mse,mean_skill,median_skill
+S1_gru_baseline,manual,130,drug,none,61.066460880866416,48.75595283508301,0.06660779923053949,0.08211134285839283

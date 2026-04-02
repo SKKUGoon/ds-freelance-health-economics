@@ -1,0 +1,2 @@
+mode,run_type,n_folds,mean_mse,median_mse,mean_skill,median_skill
+ts_supply_ts_latent,manual,130,389.0351897899921,56.287200927734375,-4.860448128630177,0.005267918375289116

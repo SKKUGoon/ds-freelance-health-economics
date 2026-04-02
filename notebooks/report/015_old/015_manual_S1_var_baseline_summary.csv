@@ -1,2 +1,0 @@
-mode,run_type,n_folds,mean_mse,median_mse,mean_skill,median_skill
-S1_var_baseline,manual,130,60.82528632970957,51.33110046386719,0.07462238624591037,0.06853314611398764

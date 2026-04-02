@@ -1,2 +1,0 @@
-mode,run_type,n_folds,target_granularity,aux_source,mean_mse,median_mse,mean_skill,median_skill
-S3_supply_history_latent_lr_low,manual,130,drug,none,326.9628524340116,56.74627876281738,-3.961316930439905,-0.0034011621326242025

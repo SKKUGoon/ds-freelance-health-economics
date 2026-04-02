@@ -1,0 +1,16 @@
+{
+  "mean_mse": 6.345032024383545,
+  "median_mse": 4.799107074737549,
+  "mean_mae": 0.8549450567135444,
+  "median_mae": 0.7819940447807312,
+  "mean_skill": -0.03393729180788339,
+  "median_skill": -0.020715783580638636,
+  "n_folds": 130,
+  "run_id": "RUN_S13_DYNP14_LATENT16_HLINEAR_E02_CAP_200_200",
+  "created_at": "2026-04-01T00:06:24.261369",
+  "device": "mps",
+  "horizon": 14,
+  "fold_step": 14,
+  "lavar_retrain_cadence": 90,
+  "quality_triggers": true
+}

@@ -1,0 +1,16 @@
+{
+  "mean_mse": 5.658745418145107,
+  "median_mse": 3.9903273582458496,
+  "mean_mae": 0.7574404771511372,
+  "median_mae": 0.6941964328289032,
+  "mean_skill": 0.06158539169510605,
+  "median_skill": 0.1538382130709841,
+  "n_folds": 130,
+  "run_id": "RUN_S14_VAR_BASELINE_015_E05_CAP_200_300",
+  "created_at": "2026-04-01T00:44:25.078396",
+  "device": "mps",
+  "horizon": 14,
+  "fold_step": 14,
+  "lavar_retrain_cadence": 90,
+  "quality_triggers": true
+}

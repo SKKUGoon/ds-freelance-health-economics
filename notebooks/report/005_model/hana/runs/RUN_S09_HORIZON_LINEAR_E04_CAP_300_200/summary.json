@@ -1,0 +1,16 @@
+{
+  "mean_mse": 6.178044870266548,
+  "median_mse": 3.9910714626312256,
+  "mean_mae": 0.7828525621157426,
+  "median_mae": 0.703125,
+  "mean_skill": 0.006296082777212962,
+  "median_skill": 0.11661580926872828,
+  "n_folds": 130,
+  "run_id": "RUN_S09_HORIZON_LINEAR_E04_CAP_300_200",
+  "created_at": "2026-03-31T22:58:15.848490",
+  "device": "mps",
+  "horizon": 14,
+  "fold_step": 14,
+  "lavar_retrain_cadence": 90,
+  "quality_triggers": true
+}

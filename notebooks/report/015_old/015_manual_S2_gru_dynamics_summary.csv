@@ -1,2 +1,0 @@
-mode,run_type,n_folds,mean_mse,median_mse,mean_skill,median_skill
-S2_gru_dynamics,manual,130,62.151877168508676,51.0476188659668,0.04775031302218247,0.03776243626906145

@@ -1,0 +1,16 @@
+{
+  "mean_mse": 15.285267659334036,
+  "median_mse": 5.497767686843872,
+  "mean_mae": 0.9589858000095074,
+  "median_mae": 0.7604166865348816,
+  "mean_skill": -2.247811295002983,
+  "median_skill": -0.16909757278050497,
+  "n_folds": 130,
+  "run_id": "RUN_S02_MLP_BASELINE_008_E05_CAP_200_300",
+  "created_at": "2026-03-31T18:39:03.254525",
+  "device": "mps",
+  "horizon": 14,
+  "fold_step": 14,
+  "lavar_retrain_cadence": 90,
+  "quality_triggers": true
+}

@@ -1,0 +1,16 @@
+{
+  "mean_mse": 6.311046265638792,
+  "median_mse": 4.934523820877075,
+  "mean_mae": 0.8593292117118836,
+  "median_mae": 0.8035714328289032,
+  "mean_skill": -0.03260148026602792,
+  "median_skill": -0.022990652092443775,
+  "n_folds": 130,
+  "run_id": "RUN_S10_DYNP14_E03_CAP_300_300",
+  "created_at": "2026-03-31T23:11:14.565574",
+  "device": "mps",
+  "horizon": 14,
+  "fold_step": 14,
+  "lavar_retrain_cadence": 90,
+  "quality_triggers": true
+}

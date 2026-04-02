@@ -1,0 +1,16 @@
+{
+  "mean_mse": 5.796840663139637,
+  "median_mse": 4.315476179122925,
+  "mean_mae": 0.7829899304188215,
+  "median_mae": 0.7328869104385376,
+  "mean_skill": 0.07780664372431209,
+  "median_skill": 0.08786881296951399,
+  "n_folds": 130,
+  "run_id": "RUN_S07_GRU_H32_L1_LR1E4_E05_CAP_200_300",
+  "created_at": "2026-03-31T22:03:36.618249",
+  "device": "mps",
+  "horizon": 14,
+  "fold_step": 14,
+  "lavar_retrain_cadence": 90,
+  "quality_triggers": true
+}

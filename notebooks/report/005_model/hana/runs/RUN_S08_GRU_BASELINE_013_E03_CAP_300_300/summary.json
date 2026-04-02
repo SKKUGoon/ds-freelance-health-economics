@@ -1,0 +1,16 @@
+{
+  "mean_mse": 6.117662516007057,
+  "median_mse": 4.283482074737549,
+  "mean_mae": 0.7786057683137747,
+  "median_mae": 0.7105654776096344,
+  "mean_skill": -0.0164937060478557,
+  "median_skill": 0.11295644583956788,
+  "n_folds": 130,
+  "run_id": "RUN_S08_GRU_BASELINE_013_E03_CAP_300_300",
+  "created_at": "2026-03-31T22:21:16.448902",
+  "device": "mps",
+  "horizon": 14,
+  "fold_step": 14,
+  "lavar_retrain_cadence": 90,
+  "quality_triggers": true
+}

@@ -1,2 +1,0 @@
-mode,run_type,n_folds,target_granularity,aux_source,lag_window,mollified,mean_mse,median_mse,mean_skill,median_skill
-S1_baseline,manual,130,drug,none,none,False,72.57541218537551,51.42633819580078,-0.11747637353858802,0.02742710125539044

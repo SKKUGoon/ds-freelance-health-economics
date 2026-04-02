@@ -1,0 +1,2 @@
+mode,run_type,n_folds,mean_mse,median_mse,mean_skill,median_skill
+S1_gru_baseline,manual,130,59.04831768916203,48.9694938659668,0.10543109503272916,0.08395214924191857

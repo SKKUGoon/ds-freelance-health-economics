@@ -1,2 +1,0 @@
-mode,run_type,n_folds,mean_mse,median_mse,mean_skill,median_skill
-S3_dynp14,manual,130,65.06828095362737,55.24479293823242,-0.010745311020230682,-0.0055958773620028435

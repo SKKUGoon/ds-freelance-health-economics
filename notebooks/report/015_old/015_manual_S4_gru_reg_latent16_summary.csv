@@ -1,2 +1,0 @@
-mode,run_type,n_folds,mean_mse,median_mse,mean_skill,median_skill
-S4_gru_reg_latent16,manual,130,61.63066602120033,50.29985237121582,0.056869688050199714,0.053184225707014976

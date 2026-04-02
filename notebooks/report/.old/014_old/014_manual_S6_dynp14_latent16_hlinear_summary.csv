@@ -1,0 +1,2 @@
+mode,run_type,n_folds,mean_mse,median_mse,mean_skill,median_skill
+S6_dynp14_latent16_hlinear,manual,130,64.81152698810284,55.3831844329834,-0.008162811951694285,-0.0039690081914717235

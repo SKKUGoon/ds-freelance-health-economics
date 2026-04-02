@@ -1,2 +1,0 @@
-mode,run_type,n_folds,target_granularity,aux_source,mean_mse,median_mse,mean_skill,median_skill
-S2_gru_h32,manual,130,drug,none,62.266701082082896,51.171875,0.04337692103126983,0.0449222722153112
