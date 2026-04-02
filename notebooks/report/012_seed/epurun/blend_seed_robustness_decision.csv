@@ -1,0 +1,3 @@
+w,seeds_total,wins_mean_mse,wins_p95,wins_both,n_worse_max,mean_delta_mse,mean_delta_p95,promote_blend_rule
+0.5,5,5,4,4,0,-0.04276741374124247,-0.0316870570622283,True
+0.55,5,5,4,4,0,-0.04214841781781105,-0.02949540239632973,True

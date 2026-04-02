@@ -1,16 +1,18 @@
-# Hana Forecasting Study: From 85-Run Sweep to Robust Ensemble
+# LAVAR Forecasting Study: From 85-Run Sweep to Robust Ensemble
 
 ## Executive Summary
 
-We developed a two-stage latent autoencoder VAR (LAVAR) pipeline for 14-day-ahead supply forecasting across 48 pharmaceutical targets (ATC codes) at Hana, evaluating 85 model configurations through strict non-overlapping rolling backtests (130 folds each).
+We developed a two-stage latent autoencoder VAR (LAVAR) pipeline for 14-day-ahead supply forecasting and validated it on two hospital datasets: **Hana** (48 ATC targets, 130 folds) and **Epurun** (248 ATC targets, 52 folds). The pipeline was evaluated through 85 model configurations with strict non-overlapping rolling backtests.
 
-**Model selection.** From the 85-run sweep, `S11_LATENT16` (latent dim=16, GRU head) emerged as the best single model (mean MSE 5.28, skill 0.14), with `S04_GRU_H32_L1` as a complementary runner-up. Two `S16` regularized variants were eliminated due to tail-risk spikes (max fold MSE up to 90 vs 39 for S11). A seed stability gate across 5 random initializations confirmed S11's superiority is not a single-seed artifact (CV 0.052 vs 0.082 for S04).
+**Model selection.** From the 85-run sweep, `S11_LATENT16` (latent dim=16, GRU head) emerged as the best single model on Hana (mean MSE 5.28, skill 0.14), with `S04_GRU_H32_L1` as a complementary runner-up. Two `S16` regularized variants were eliminated due to tail-risk spikes (max fold MSE up to 90 vs 39 for S11). A seed stability gate across 5 random initializations confirmed S11's superiority is not a single-seed artifact (CV 0.052 vs 0.082 for S04).
 
-**Ensemble.** A static convex blend `y = 0.55 · S11 + 0.45 · S04`, with weight selected via 70/30 temporal split, improves mean MSE by **−4.89%** over pure S11 (5.31 vs 5.58) while compressing tail risk (p95 fold MSE: 12.8 vs 14.0). The improvement holds in **5 out of 5** independent seed draws, with the blend also exhibiting lower seed-to-seed variance (std 0.18 vs 0.29).
+**Ensemble.** A static convex blend `y = 0.55 · S11 + 0.45 · S04`, with weight selected via 70/30 temporal split, improves mean MSE by **−4.89%** over pure S11 on Hana (5.31 vs 5.58) while compressing tail risk (p95 fold MSE: 12.8 vs 14.0). The improvement holds in **5 out of 5** independent seed draws, with the blend also exhibiting lower seed-to-seed variance (std 0.18 vs 0.29).
 
-**Per-drug insight.** Error is highly concentrated: 5 of 48 drugs account for ~72% of aggregate MSE (led by H02AB02 at 25%). Most drugs are predicted with near-zero error. Targeted refinement on these few high-error targets represents the highest-leverage path to further improvement.
+**Epurun replication.** The same S11/S04 blend recipe was replicated on Epurun (248 targets, 52 folds). The blend (w=0.55) improves mean MSE by **−4.38%** over pure S11 (0.920 vs 0.962), winning on **5/5** seeds. Notably, S04 is slightly stronger than S11 on central tendency in Epurun (mean MSE 0.957 vs 0.962), the opposite ranking from Hana, yet S11 retains better tail behavior (max fold MSE 3.45 vs 4.57). The blend leverages both models' strengths, dramatically compressing max fold MSE (median 2.40 vs 3.27 for S11).
 
-**Recommendation.** Deploy the S11/S04 blend at w=0.55–0.60. Any weight in [0.50, 0.65] outperforms pure S11 on every seed tested. Pure S11 serves as a single-model fallback.
+**Per-drug insight.** Error is concentrated in both hospitals. At Hana, 5 of 48 drugs account for ~72% of aggregate MSE (led by H02AB02 at 25%). At Epurun, the top 5 of 248 drugs account for ~20% of MSE (led by B05XA03), with most drugs near zero error. Targeted refinement on high-error drugs is the highest-leverage improvement path.
+
+**Recommendation.** Deploy the S11/S04 blend at w=0.55–0.60 for Hana, and w=0.50–0.55 for Epurun. Pure S11 serves as a single-model fallback at both sites.
 
 ---
 
@@ -22,11 +24,11 @@ We built and evaluated a forecasting pipeline on unified Hana data (`X`, `y`) wi
 
 ## 2) Experimental Protocol
 
-- Total runs: **85 / 85 completed**
+- Total runs: **85 / 85 completed** (Hana sweep); **10 / 10** (Epurun seed replication)
 - Device: **mps**
 - Backtest setup: `horizon=14`, `fold_step=14` (no overlap), retrain cadence `90`, quality triggers enabled
-- Folds per run: **130**
-- Main sources:
+- Folds per run: **130** (Hana), **52** (Epurun)
+- Main sources (Hana):
   - `report/005_model/hana/leaderboard.csv`
   - `report/005_model/hana/worst_folds_by_mse.csv`
   - `report/006_graph/hana/top4_fold_metrics_reconstructed.csv`
@@ -40,6 +42,15 @@ We built and evaluated a forecasting pipeline on unified Hana data (`X`, `y`) wi
   - `report/010_ensemble/hana/ensemble_metrics_overall.csv`
   - `report/010_ensemble/hana/ensemble_metrics_by_seed.csv`
   - `report/010_ensemble/hana/ensemble_ci_per_drug.csv`
+- Main sources (Epurun):
+  - `report/011_seed/epurun/seed_stability_summary.csv`
+  - `report/011_seed/epurun/seed_per_run_metrics.csv`
+  - `report/012_seed/epurun/blend_seed_fixed_weights_summary.csv`
+  - `report/012_seed/epurun/blend_seed_wstar_summary.csv`
+  - `report/012_seed/epurun/blend_seed_robustness_decision.csv`
+  - `report/013_ensemble/epurun/ensemble_metrics_overall.csv`
+  - `report/013_ensemble/epurun/ensemble_metrics_by_seed.csv`
+  - `report/013_ensemble/epurun/ensemble_ci_per_drug.csv`
 
 ---
 
@@ -264,15 +275,154 @@ The per-drug CI figure (Figure 12) shows true values overlaid with ensemble pred
 
 ---
 
-## 10) Limitations
+## 10) Epurun Replication — Seed Stability Gate (011_seed)
 
-- **Per-horizon-step breakdown missing.** Stage G (010) added per-drug analysis, revealing that 5 of 48 drugs drive ~72% of aggregate MSE. However, per-horizon-step breakdowns (h=1 vs h=14) have not been examined — error may concentrate in longer horizons where latent rollout accumulates drift.
-- **No sweep-level figure.** The 85-run landscape (e.g., scenario × epoch heatmap) is not visualized, making it harder to assess how broadly we searched.
-- **Fixed blend weight.** The optimal w* varies 0.45–0.75 across seeds. A static w=0.55 is a practical compromise but not theoretically optimal. Adaptive weighting (e.g., based on recent validation loss) could improve this but adds deployment complexity.
+To validate the generalizability of the LAVAR pipeline and the S11/S04 ensemble recipe, we replicated Stages E–G on a second hospital dataset: **Epurun** (248 ATC targets, 52 folds, `horizon=14`, `fold_step=14`). The same 5 seeds (`42, 123, 456, 789, 1024`) and identical training protocol were used.
+
+Run completion status: **10 / 10** (`report/011_seed/epurun/run_status.json`).
+
+### Seed summary (5 seeds per scenario)
+
+| Scenario | Mean MSE (mean ± std) | CV (mean MSE) | Median Skill (mean ± std) | Max Fold MSE (mean) | P95 Fold MSE (mean) |
+|---|---:|---:|---:|---:|---:|
+| S04_GRU_H32_L1 | **0.957 ± 0.009** | **0.009** | **−0.032 ± 0.008** | 4.57 | **1.299** |
+| S11_LATENT16 | 0.962 ± 0.011 | 0.012 | −0.049 ± 0.015 | **3.45** | 1.337 |
+
+Additional head-to-head checks from `seed_per_run_metrics.csv`:
+- S04 has lower mean MSE in **4/5** seeds.
+- S04 has higher median skill in **5/5** seeds.
+- S11 has lower max fold MSE in **5/5** seeds (best tail behavior).
+
+**Contrast with Hana:** In Hana, S11 was clearly the stronger model on central tendency (mean MSE 5.58 vs 5.48 for S04). In Epurun, the ranking reverses — S04 is marginally better on average (0.957 vs 0.962). However, S11 retains a consistent tail-risk advantage (max fold MSE 3.45 vs 4.57). This divergence motivates blending: neither model dominates the other across both central and tail metrics.
 
 ---
 
-## 11) Conclusion
+## 11) Epurun Replication — Cross-Seed Blend Robustness (012_seed)
+
+We re-ran the S11+S04 blend at each weight for all 5 epurun seed pairs, replicating the Hana Stage F protocol.
+
+### Mean-MSE improvement is robust
+
+At the fixed weight w=0.55, the blend beats pure S11 on mean MSE in **5/5 seeds**:
+
+| Seed | S11 pure MSE | Blend (w=0.55) MSE | Delta | P95 Delta |
+|---:|---:|---:|---:|---:|
+| 42 | 0.961 | 0.922 | **−0.039** | −0.028 |
+| 123 | 0.962 | 0.923 | **−0.039** | −0.044 |
+| 456 | 0.976 | 0.929 | **−0.046** | −0.053 |
+| 789 | 0.965 | 0.916 | **−0.049** | −0.031 |
+| 1024 | 0.944 | 0.908 | **−0.037** | +0.008 |
+
+Mean improvement: **−0.042 MSE** (~4.4%). The blend wins on p95 in 4/5 seeds. The sole exception (seed 1024, p95 delta +0.008) is negligible.
+
+### Optimal weight is seed-dependent
+
+| Seed | w* (mean MSE) | w* (composite) |
+|---:|---:|---:|
+| 42 | 0.50 | 0.45 |
+| 123 | 0.45 | 0.40 |
+| 456 | 0.45 | 0.35 |
+| 789 | 0.45 | 0.35 |
+| 1024 | 0.55 | 0.60 |
+
+The per-seed w* ranges from **0.45 to 0.55**, notably more S04-leaning than Hana's 0.45–0.75 range. This is consistent with S04 being the stronger central-tendency model on Epurun. A fixed w=0.50–0.55 is a reasonable middle ground.
+
+### Robustness gate
+
+Both w=0.50 and w=0.55 pass the promotion rule (wins_both ≥ 4/5, no seeds with severe degradation):
+
+| w | Wins (both) | Mean Δ MSE | Mean Δ P95 | Promote |
+|---|---:|---:|---:|---|
+| 0.50 | 4/5 | −0.043 | −0.032 | Yes |
+| 0.55 | 4/5 | −0.042 | −0.029 | Yes |
+
+### Tail-risk compression
+
+The blend dramatically compresses max fold MSE across seeds:
+
+- **P95 fold MSE** (median across seeds): S11=1.328, S04=1.293, Blend w=0.55=**1.297**
+- **Max fold MSE** (median across seeds): S11=3.273, S04=4.700, Blend w=0.55=**2.402**
+
+The max fold MSE compression is particularly striking: the blend's worst fold (median 2.40) is 27% below S11's (3.27) and 49% below S04's (4.70).
+
+---
+
+## 12) Epurun Replication — Production Ensemble with Per-Drug Breakdown (013_ensemble)
+
+### Overall metrics (5 seeds)
+
+| Configuration | Mean MSE (mean ± std) | Mean MAE | Mean Skill | P95 Fold MSE | Max Fold MSE |
+|---|---:|---:|---:|---:|---:|
+| Blend w=0.55 | **0.920 ± 0.008** | **0.404** | **−0.109** | 1.307 | **2.432** |
+| Pure S04 | 0.957 ± 0.009 | 0.407 | −0.173 | **1.299** | 4.575 |
+| Pure S11 | 0.962 ± 0.011 | 0.411 | −0.171 | 1.337 | 3.454 |
+
+The blend improves mean MSE by **−0.042 (−4.38%)** relative to pure S11, consistent with the 012_seed estimate. The blend's seed-to-seed standard deviation (0.008) is lower than either pure model (S11: 0.011, S04: 0.009), confirming blending stabilizes predictions.
+
+### Per-seed breakdown
+
+| Seed | Blend MSE | S11 MSE | S04 MSE | Blend Δ vs S11 |
+|---:|---:|---:|---:|---:|
+| 42 | 0.922 | 0.961 | 0.957 | −0.039 |
+| 123 | 0.923 | 0.962 | 0.952 | −0.039 |
+| 456 | 0.929 | 0.976 | 0.966 | −0.046 |
+| 789 | 0.916 | 0.965 | 0.946 | −0.049 |
+| 1024 | 0.908 | 0.944 | 0.966 | −0.037 |
+
+The blend wins on mean MSE in **5/5** seeds.
+
+### Per-drug error concentration
+
+Across the 248 ATC targets:
+
+| Drug (ATC) | Per-Drug MSE | Cumulative % |
+|---|---:|---:|
+| B05XA03 | 13.7 | 6% |
+| A02AA04 | 10.2 | 11% |
+| B05BB02 | 8.0 | 15% |
+| A11EA | 6.8 | 18% |
+| J01CR05 | 6.2 | 20% |
+
+The top 5 drugs account for **~20%** of total MSE. Compared to Hana (where 5 of 48 drugs drove ~72%), error is more dispersed across Epurun's 248 targets. Still, 85 of 248 drugs have MSE < 0.1, and targeted improvement on the top error contributors remains the most efficient path.
+
+### Confidence interval visualization
+
+The per-drug CI figure (Figure E3) shows true values overlaid with ensemble predictions and 95% empirical CI bands for the top drugs by error. CI bands are generally tight for most drugs, with wider bands on high-error targets.
+
+---
+
+## 13) Cross-Hospital Comparison
+
+| Metric | Hana (48 targets) | Epurun (248 targets) |
+|---|---:|---:|
+| Best single model | S11 | S04 (marginal) |
+| S11 mean MSE (5-seed avg) | 5.583 | 0.962 |
+| S04 mean MSE (5-seed avg) | 6.148 | 0.957 |
+| Blend (w=0.55) mean MSE | 5.310 | 0.920 |
+| Blend Δ vs S11 | −4.89% | −4.38% |
+| Blend wins (seeds) | 5/5 | 5/5 |
+| Optimal w* range | 0.45–0.75 | 0.45–0.55 |
+| Top 5 drugs share of MSE | ~72% | ~20% |
+| Max fold MSE compression | 43.3 vs 44.1 (S11) | 2.40 vs 3.27 (S11) |
+
+Key observations:
+- The blend improvement (~4–5%) is remarkably consistent across hospitals despite very different target counts, error scales, and model rankings.
+- The optimal w* shifts toward S04 on Epurun, reflecting S04's relative strength there.
+- Error concentration is much higher at Hana (fewer, higher-volume targets) than Epurun.
+- Max fold MSE compression is proportionally much larger at Epurun (27% reduction vs 2% at Hana).
+
+---
+
+## 14) Limitations
+
+- **Per-horizon-step breakdown missing.** Per-drug analysis was added in Stages G (Hana) and 013 (Epurun), but per-horizon-step breakdowns (h=1 vs h=14) have not been examined — error may concentrate in longer horizons where latent rollout accumulates drift.
+- **No sweep-level figure.** The 85-run landscape (e.g., scenario × epoch heatmap) is not visualized, making it harder to assess how broadly we searched.
+- **Fixed blend weight.** The optimal w* varies 0.45–0.75 (Hana) and 0.45–0.55 (Epurun) across seeds. A static w=0.55 is a practical compromise but not theoretically optimal. Adaptive weighting (e.g., based on recent validation loss) could improve this but adds deployment complexity.
+- **Epurun stages A–D not replicated.** The 85-run sweep, top-4 diagnostics, and initial ensemble tuning (Stages A–D) were not repeated on Epurun; only the seed stability, cross-seed blend, and production ensemble stages (E–G equivalent) were replicated using the same S11/S04 models.
+
+---
+
+## 15) Conclusion
 
 Progression:
 
@@ -280,18 +430,24 @@ Progression:
 2. **Top-4 shortlisting** (006) based on mean/median metrics and fold-level diagnostics.
 3. **Top-2 narrowing** (006) to `S11` and `S04` based on stability and tail behavior.
 4. **Offline ensemble** (007) — `S11 + S04` blend at w=0.55 improves mean MSE by ~5% over pure S11.
-5. **Seed stability gate** (008) — S11 confirmed as the stronger, more stable single model across 5 seeds.
-6. **Cross-seed blend robustness** (009) — the blend improvement holds in **5/5** seed draws, with mean MSE gain of -0.27 and p95 compression across seeds.
-7. **Production ensemble with per-drug breakdown** (010) — confirms −4.89% mean MSE improvement with tighter seed variance (std 0.179 vs 0.288). Per-drug analysis reveals top 5 of 48 drugs account for ~72% of aggregate MSE, identifying clear targets for future model refinement.
+5. **Seed stability gate** (008) — S11 confirmed as the stronger, more stable single model across 5 seeds (Hana).
+6. **Cross-seed blend robustness** (009) — the blend improvement holds in **5/5** seed draws (Hana), with mean MSE gain of -0.27 and p95 compression.
+7. **Production ensemble with per-drug breakdown** (010) — confirms −4.89% mean MSE improvement at Hana with tighter seed variance. Per-drug analysis reveals top 5 of 48 drugs account for ~72% of aggregate MSE.
+8. **Epurun seed stability** (011) — on a second hospital (248 targets, 52 folds), S04 is marginally stronger on central tendency while S11 retains tail-risk advantage, motivating the blend.
+9. **Epurun cross-seed blend robustness** (012) — blend (w=0.55) wins 5/5 seeds, with −4.38% mean MSE improvement and dramatic max fold MSE compression.
+10. **Epurun production ensemble** (013) — confirms blend improvement and tighter seed variance. Error is more dispersed across 248 targets (top 5 ≈ 20% of MSE).
 
 **Deployment recommendation:**
-- **Primary**: S11/S04 blend at **w=0.55–0.60** (S11-weighted). This improves mean MSE by ~5% and compresses tail risk across random initializations.
-- **Fallback**: Pure S11 as single-model baseline if blend infrastructure is unavailable.
-- The blend is not sensitive to exact weight choice — any w in [0.50, 0.65] outperforms pure S11 on every seed tested.
+- **Hana**: S11/S04 blend at **w=0.55–0.60** (S11-weighted). Any w in [0.50, 0.65] outperforms pure S11 on every seed tested.
+- **Epurun**: S11/S04 blend at **w=0.50–0.55** (balanced-to-S04-leaning). Any w in [0.45, 0.55] outperforms pure S11 on every seed tested.
+- **Fallback**: Pure S11 (Hana) or S04 (Epurun) as single-model baselines if blend infrastructure is unavailable.
+- The blend improvement (~4–5%) and tail-risk compression are consistent across both hospitals, supporting the generalizability of the ensemble recipe.
 
 ---
 
-## 12) Figures
+## 16) Figures
+
+### Hana Figures
 
 ### Figure 1 - Top-4 fold-wise metrics
 ![Top-4 fold-wise metrics](report/006_graph/hana/top4_foldwise_metrics.png)
@@ -308,30 +464,55 @@ Progression:
 ### Figure 5 - Foldwise S11 vs S04 vs Blend
 ![Foldwise blend comparison](report/007_ensemble/hana/blend_foldwise_comparison.png)
 
-### Figure 6 - Seed spread by scenario
+### Figure 6 - Seed spread by scenario (Hana)
 ![Seed spread boxplot](report/008_seed/hana/seed_spread_boxplot.png)
 
-### Figure 7 - Foldwise seed behavior
+### Figure 7 - Foldwise seed behavior (Hana)
 ![Seed foldwise by scenario](report/008_seed/hana/seed_foldwise_by_scenario.png)
 
-### Figure 8 - Seed correlation matrix
+### Figure 8 - Seed correlation matrix (Hana)
 ![Seed correlation matrix](report/008_seed/hana/seed_correlation_matrix.png)
 
-### Figure 9 - Blend mean-MSE delta vs S11 by seed (w=0.55)
+### Figure 9 - Blend mean-MSE delta vs S11 by seed, w=0.55 (Hana)
 ![Blend delta vs S11](report/009_seed/hana/blend_seed_delta_vs_s11_w0.55.png)
 
-### Figure 10 - Optimal w* by seed
+### Figure 10 - Optimal w* by seed (Hana)
 ![w* by seed](report/009_seed/hana/blend_seed_wstar_by_seed.png)
 
-### Figure 11 - Tail-risk compression: blend vs pure models across seeds
+### Figure 11 - Tail-risk compression: blend vs pure models across seeds (Hana)
 ![Tail-risk comparison](report/009_seed/hana/blend_seed_tailrisk_comparison.png)
 
-### Figure 12 - Per-drug true vs predicted with 95% CI
+### Figure 12 - Per-drug true vs predicted with 95% CI (Hana)
 ![Per-drug CI](report/010_ensemble/hana/ensemble_true_vs_pred_ci_per_drug.png)
+
+### Epurun Figures
+
+### Figure E1 - Seed spread by scenario (Epurun)
+![Seed spread boxplot](report/011_seed/epurun/seed_spread_boxplot.png)
+
+### Figure E2 - Foldwise seed behavior (Epurun)
+![Seed foldwise by scenario](report/011_seed/epurun/seed_foldwise_by_scenario.png)
+
+### Figure E3 - Seed correlation matrix (Epurun)
+![Seed correlation matrix](report/011_seed/epurun/seed_correlation_matrix.png)
+
+### Figure E4 - Blend mean-MSE delta vs S11 by seed, w=0.55 (Epurun)
+![Blend delta vs S11](report/012_seed/epurun/blend_seed_delta_vs_s11_w0.55.png)
+
+### Figure E5 - Optimal w* by seed (Epurun)
+![w* by seed](report/012_seed/epurun/blend_seed_wstar_by_seed.png)
+
+### Figure E6 - Tail-risk compression: blend vs pure models across seeds (Epurun)
+![Tail-risk comparison](report/012_seed/epurun/blend_seed_tailrisk_comparison.png)
+
+### Figure E7 - Per-drug true vs predicted with 95% CI (Epurun)
+![Per-drug CI](report/013_ensemble/epurun/ensemble_true_vs_pred_ci_per_drug.png)
 
 ---
 
-## 13) Key Artifacts
+## 17) Key Artifacts
+
+### Hana
 
 - `report/005_model/hana/leaderboard.csv`
 - `report/005_model/hana/worst_folds_by_mse.csv`
@@ -356,3 +537,23 @@ Progression:
 - `report/010_ensemble/hana/ensemble_ci_per_drug.csv`
 - `report/010_ensemble/hana/ensemble_seed_predictions_per_drug.csv`
 - `report/010_ensemble/hana/ensemble_true_vs_pred_ci_per_drug.png`
+
+### Epurun
+
+- `report/011_seed/epurun/seed_stability_summary.csv`
+- `report/011_seed/epurun/seed_per_run_metrics.csv`
+- `report/011_seed/epurun/seed_spread_boxplot.png`
+- `report/011_seed/epurun/seed_foldwise_by_scenario.png`
+- `report/011_seed/epurun/seed_correlation_matrix.png`
+- `report/012_seed/epurun/blend_seed_fixed_weights_summary.csv`
+- `report/012_seed/epurun/blend_seed_wstar_summary.csv`
+- `report/012_seed/epurun/blend_seed_robustness_decision.csv`
+- `report/012_seed/epurun/blend_seed_delta_vs_s11_w0.55.png`
+- `report/012_seed/epurun/blend_seed_wstar_by_seed.png`
+- `report/012_seed/epurun/blend_seed_tailrisk_comparison.png`
+- `report/013_ensemble/epurun/ensemble_summary.md`
+- `report/013_ensemble/epurun/ensemble_metrics_overall.csv`
+- `report/013_ensemble/epurun/ensemble_metrics_by_seed.csv`
+- `report/013_ensemble/epurun/ensemble_ci_per_drug.csv`
+- `report/013_ensemble/epurun/ensemble_seed_predictions_per_drug.csv`
+- `report/013_ensemble/epurun/ensemble_true_vs_pred_ci_per_drug.png`
