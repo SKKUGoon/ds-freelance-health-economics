@@ -12,7 +12,9 @@
 
 **薬剤別インサイト。** 誤差は両病院で集中している。Hanaでは48薬剤中5薬剤で集計MSEの約72%を占め、その先頭はH02AB02の25%だった。Epurunでは248薬剤中上位5薬剤でMSEの約20%を占め、先頭はB05XA03だった。大半の薬剤はほぼゼロ誤差であり、高誤差薬剤に対する重点的な改善が最もレバレッジの高い経路である。
 
-**推奨。** HanaではS11/S04ブレンドを w=0.55–0.60、Epurunでは w=0.50–0.55 で運用する。両サイトとも、単一モデルのフォールバックとして純粋なS11を利用できる。
+**Skill解釈。** 新しい薬剤別・密度バケット分析（`014_skill`）により、Hanaでaggregate skillが正で、Epurunでnaive比skillが負のままである理由が明確になった。Hanaではdense 4薬剤がすべてnaiveに勝ち、sparseバケットもrow-weighted基準で正（`row_skill=+0.152`）であり、モデルは高ボリューム薬剤以外でも信号を捉えている。これに対しEpurunの負のskillはultra-sparseなゼロ薬剤だけでは説明できない。denseバケットでも平均的にはnaiveに負けており（`row_skill=-0.067`, positive 5/97）、sparseはさらに悪い。これは、直近値をそのまま使うnaiveが非常に強くなるほど需要の時間持続性が高い環境と整合的である。Epurunが高齢者ケア寄りの病院である点を踏まえると、慢性的で日々あまり変わらない投薬レジメンが短期需要を支配している可能性が高い。ただし、これは文脈に整合的な解釈であり、因果を証明するものではない。
+
+**推奨。** HanaではS11/S04ブレンドを w=0.55–0.60、Epurunでは w=0.50–0.55 で運用する。単一モデルのフォールバックとしては、Hanaでは純粋なS11、Epurunでは純粋なS04を使う。
 
 ---
 
@@ -42,6 +44,9 @@
   - `report/010_ensemble/hana/ensemble_metrics_overall.csv`
   - `report/010_ensemble/hana/ensemble_metrics_by_seed.csv`
   - `report/010_ensemble/hana/ensemble_ci_per_drug.csv`
+  - `report/014_skill/hana/014_skill_summary.md`
+  - `report/014_skill/hana/skill_by_bucket.csv`
+  - `report/014_skill/hana/skill_by_drug.csv`
 - 主なソース（Epurun）:
   - `report/011_seed/epurun/seed_stability_summary.csv`
   - `report/011_seed/epurun/seed_per_run_metrics.csv`
@@ -51,6 +56,9 @@
   - `report/013_ensemble/epurun/ensemble_metrics_overall.csv`
   - `report/013_ensemble/epurun/ensemble_metrics_by_seed.csv`
   - `report/013_ensemble/epurun/ensemble_ci_per_drug.csv`
+  - `report/014_skill/epurun/014_skill_summary.md`
+  - `report/014_skill/epurun/skill_by_bucket.csv`
+  - `report/014_skill/epurun/skill_by_drug.csv`
 
 ---
 
@@ -411,6 +419,13 @@ max fold MSEの圧縮は特に印象的である。ブレンドのworst fold（m
 - 誤差集中はEpurunよりHanaで大きい（ターゲット数が少なく、ボリュームの大きい薬剤に集中）。
 - Max fold MSEの圧縮率はEpurunの方が比例的に大きい（27%減、Hanaは2%減）。
 
+### 014_skillの解釈
+
+- Hanaの正のaggregate skillはdenseとsparseの両方に支えられている。dense 4ターゲットはすべてnaiveに勝ち、sparseも個別では14/30しか正でないものの、row-weightedでは正（`row_skill=+0.152`）である。
+- Epurunの負のaggregate skillは、ゼロが多いだけのアーティファクトではない。denseバケットでも平均的にはnaiveに負けており（`row_skill=-0.067`, 正のターゲットは `5/97`）、sparseバケットはさらに負である（`row_skill=-0.221`）。
+- これは、Epurunの需要がHanaよりも時間的に持続的であることを示唆する。多くの薬剤では「直近の観測値をそのまま繰り返す」naiveがすでに非常に強い予測器になっている。Epurunが高齢者ケア寄りの病院であるという文脈を考えると、慢性的な投薬パターンと日々繰り返されるレジメンが短期需要を支配している可能性が高い。
+- 実務上の含意は、Epurunの248ターゲット全体で広くnaiveに勝つことを期待すべきではないという点である。現実的な改善経路は、短期変動や追加シグナルが実際に存在する一部の薬剤に絞って改善することである。
+
 ---
 
 ## 14) 限界
@@ -418,6 +433,7 @@ max fold MSEの圧縮は特に印象的である。ブレンドのworst fold（m
 - **各horizon stepの内訳が欠けている。** 薬剤別分析はStage G（Hana）と013（Epurun）で追加されたが、h=1 と h=14 のようなhorizon step別内訳はまだ検証していない。潜在rolloutのdriftが蓄積する長いhorizonに誤差が集中している可能性がある。
 - **Sweep全体図がない。** 85-runの全景（たとえばシナリオ × epochヒートマップ）が可視化されておらず、探索範囲の広さを把握しにくい。
 - **固定ブレンド重み。** 最適 `w*` はseedごとにHanaで0.45–0.75、Epurunで0.45–0.55の範囲で変動する。静的な w=0.55 は実務上の妥協点だが、理論的最適ではない。最近のvalidation lossに基づく適応重み付けなどで改善余地はあるが、配備の複雑さは増す。
+- **014 skillのバケットは解釈用であり、foldごとの厳密再現ではない。** `014_skill` 分析では、Stage 2と同じ閾値を使いながら、dense/sparse/ultraの区分を全データのnonzero rateから固定している。したがって、foldごとの学習時点の正確なバケット所属を再生したものではない。
 - **EpurunではStages A–Dを再現していない。** 85-run sweep、Top-4診断、初期アンサンブル調整（Stages A–D）はEpurunでは再実施せず、同じS11/S04モデルを使ってseed stability、cross-seed blend、本番アンサンブル段階（E–G相当）のみを再現した。
 
 ---
@@ -436,11 +452,13 @@ max fold MSEの圧縮は特に印象的である。ブレンドのworst fold（m
 8. **Epurun seed stability**（011）では、第2病院（248 targets、52 folds）で、中心傾向ではS04がわずかに強い一方、S11がtail-risk優位を保つことを確認し、ブレンドの動機が補強された。
 9. **Epurun cross-seed blend robustness**（012）では、ブレンド（w=0.55）が 5/5 seeds で勝利し、mean MSE **−4.38%** 改善と大幅なmax fold MSE圧縮を示した。
 10. **Epurun production ensemble**（013）では、ブレンド改善とseed分散の縮小を確認した。誤差は248 targetsにより分散しており、上位5薬剤でMSEの約20%を占めた。
+11. **病院横断のskill分解**（014）では、Hanaの正のskillはdenseと一部sparse薬剤に支えられている一方、Epurunはdenseでもnaiveより弱く、naive基準線がはるかに強い環境であることが示された。
 
 **配備推奨:**
 - **Hana**: S11/S04ブレンドを **w=0.55–0.60**（S11寄り）で運用する。検証したすべてのseedで、[0.50, 0.65] の任意のwが純粋なS11を上回った。
 - **Epurun**: S11/S04ブレンドを **w=0.50–0.55**（バランス型からややS04寄り）で運用する。検証したすべてのseedで、[0.45, 0.55] の任意のwが純粋なS11を上回った。
 - **フォールバック**: ブレンド基盤が使えない場合、単一モデルのベースラインとしてPure S11（Hana）またはS04（Epurun）を用いる。
+- **Epurunの解釈**: naive比で負のskillは、高齢者ケア中心の高持続性需要パターンと整合的である。したがって次の改善段階では、248ターゲット全体で広くnaiveを上回ることを狙うよりも、非持続的で変動の大きい少数薬剤を標的にする方が現実的である。
 - ブレンド改善（約4–5%）とテールリスク圧縮は両病院で一貫しており、このアンサンブル手法の一般化可能性を支持する。
 
 ---
@@ -537,6 +555,12 @@ max fold MSEの圧縮は特に印象的である。ブレンドのworst fold（m
 - `report/010_ensemble/hana/ensemble_ci_per_drug.csv`
 - `report/010_ensemble/hana/ensemble_seed_predictions_per_drug.csv`
 - `report/010_ensemble/hana/ensemble_true_vs_pred_ci_per_drug.png`
+- `report/014_skill/hana/014_skill_summary.md`
+- `report/014_skill/hana/skill_by_bucket.csv`
+- `report/014_skill/hana/skill_by_drug.csv`
+- `report/014_skill/hana/skill_by_bucket.png`
+- `report/014_skill/hana/skill_vs_density.png`
+- `report/014_skill/hana/top_bottom_drug_skill.png`
 
 ### Epurun
 
@@ -557,3 +581,9 @@ max fold MSEの圧縮は特に印象的である。ブレンドのworst fold（m
 - `report/013_ensemble/epurun/ensemble_ci_per_drug.csv`
 - `report/013_ensemble/epurun/ensemble_seed_predictions_per_drug.csv`
 - `report/013_ensemble/epurun/ensemble_true_vs_pred_ci_per_drug.png`
+- `report/014_skill/epurun/014_skill_summary.md`
+- `report/014_skill/epurun/skill_by_bucket.csv`
+- `report/014_skill/epurun/skill_by_drug.csv`
+- `report/014_skill/epurun/skill_by_bucket.png`
+- `report/014_skill/epurun/skill_vs_density.png`
+- `report/014_skill/epurun/top_bottom_drug_skill.png`

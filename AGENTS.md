@@ -12,6 +12,14 @@ Rules:
 3. Include objective, scope, file list, implementation steps, and validation criteria.
 4. Do not proceed with implementation without this record.
 
+## Multilingual Paper Sync
+
+When editing any of the paper files below, keep their substantive content synchronized in the same change unless the user explicitly requests otherwise:
+
+- `notebooks/PAPER_ENG.md`
+- `notebooks/PAPER_KOR.md`
+- `notebooks/PAPER_JPN.md`
+
 ## Public API
 
 ```python

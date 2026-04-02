@@ -12,7 +12,9 @@ We developed a two-stage latent autoencoder VAR (LAVAR) pipeline for 14-day-ahea
 
 **Per-drug insight.** Error is concentrated in both hospitals. At Hana, 5 of 48 drugs account for ~72% of aggregate MSE (led by H02AB02 at 25%). At Epurun, the top 5 of 248 drugs account for ~20% of MSE (led by B05XA03), with most drugs near zero error. Targeted refinement on high-error drugs is the highest-leverage improvement path.
 
-**Recommendation.** Deploy the S11/S04 blend at w=0.55–0.60 for Hana, and w=0.50–0.55 for Epurun. Pure S11 serves as a single-model fallback at both sites.
+**Skill interpretation.** The new per-drug and density-bucket analysis (`014_skill`) clarifies why Hana has positive aggregate skill while Epurun remains negative against naive. In Hana, all 4 dense drugs beat naive and sparse drugs remain positive on a row-weighted basis (`row_skill=+0.152`), so the model adds signal beyond only the highest-volume targets. In Epurun, negative skill is not explained only by ultra-sparse zeros: even the dense bucket is negative on average (`row_skill=-0.067`, only 5/97 dense drugs beat naive), and the sparse bucket is more negative still. This pattern is consistent with a more persistent care setting in which many medications are repeated day after day, making the last-value naive baseline unusually strong. Because Epurun is an elderly-care hospital, a plausible interpretation is that chronic, slowly varying medication regimens dominate short-horizon demand; we treat this as a domain-consistent hypothesis rather than a proven causal claim.
+
+**Recommendation.** Deploy the S11/S04 blend at w=0.55–0.60 for Hana, and w=0.50–0.55 for Epurun. Pure S11 on Hana and pure S04 on Epurun serve as the single-model fallbacks.
 
 ---
 
@@ -42,6 +44,9 @@ We built and evaluated a forecasting pipeline on unified Hana data (`X`, `y`) wi
   - `report/010_ensemble/hana/ensemble_metrics_overall.csv`
   - `report/010_ensemble/hana/ensemble_metrics_by_seed.csv`
   - `report/010_ensemble/hana/ensemble_ci_per_drug.csv`
+  - `report/014_skill/hana/014_skill_summary.md`
+  - `report/014_skill/hana/skill_by_bucket.csv`
+  - `report/014_skill/hana/skill_by_drug.csv`
 - Main sources (Epurun):
   - `report/011_seed/epurun/seed_stability_summary.csv`
   - `report/011_seed/epurun/seed_per_run_metrics.csv`
@@ -51,6 +56,9 @@ We built and evaluated a forecasting pipeline on unified Hana data (`X`, `y`) wi
   - `report/013_ensemble/epurun/ensemble_metrics_overall.csv`
   - `report/013_ensemble/epurun/ensemble_metrics_by_seed.csv`
   - `report/013_ensemble/epurun/ensemble_ci_per_drug.csv`
+  - `report/014_skill/epurun/014_skill_summary.md`
+  - `report/014_skill/epurun/skill_by_bucket.csv`
+  - `report/014_skill/epurun/skill_by_drug.csv`
 
 ---
 
@@ -411,6 +419,13 @@ Key observations:
 - Error concentration is much higher at Hana (fewer, higher-volume targets) than Epurun.
 - Max fold MSE compression is proportionally much larger at Epurun (27% reduction vs 2% at Hana).
 
+### 014_skill interpretation
+
+- Hana's positive aggregate skill is supported by both dense and sparse drugs. All 4 dense targets beat naive, and sparse targets remain positive on a row-weighted basis (`row_skill=+0.152`) even though only 14/30 sparse drugs are positive individually.
+- Epurun's negative aggregate skill is not just a zero-heavy artifact. Even in the dense bucket, the model loses to naive on average (`row_skill=-0.067`, `5/97` positive targets), while the sparse bucket is more negative (`row_skill=-0.221`).
+- This suggests that Epurun demand is more temporally persistent than Hana demand: for many drugs, “repeat the last observed value” is already a very strong forecast. Given Epurun's elderly-care context, a plausible interpretation is that chronic medication patterns and repeated day-to-day regimens dominate short-horizon demand.
+- The practical implication is that broad model wins across all 248 Epurun targets are unlikely. The most realistic path is to target the subset of drugs with genuine short-term volatility or signal, while accepting that naive remains hard to beat on stable chronic-use targets.
+
 ---
 
 ## 14) Limitations
@@ -418,6 +433,7 @@ Key observations:
 - **Per-horizon-step breakdown missing.** Per-drug analysis was added in Stages G (Hana) and 013 (Epurun), but per-horizon-step breakdowns (h=1 vs h=14) have not been examined — error may concentrate in longer horizons where latent rollout accumulates drift.
 - **No sweep-level figure.** The 85-run landscape (e.g., scenario × epoch heatmap) is not visualized, making it harder to assess how broadly we searched.
 - **Fixed blend weight.** The optimal w* varies 0.45–0.75 (Hana) and 0.45–0.55 (Epurun) across seeds. A static w=0.55 is a practical compromise but not theoretically optimal. Adaptive weighting (e.g., based on recent validation loss) could improve this but adds deployment complexity.
+- **014 skill buckets are descriptive, not fold-exact.** The `014_skill` analysis assigns dense/sparse/ultra buckets from full-dataset nonzero rates using the same thresholds as Stage 2. This is appropriate for interpretation, but it does not replay exact per-fold training-time bucket membership.
 - **Epurun stages A–D not replicated.** The 85-run sweep, top-4 diagnostics, and initial ensemble tuning (Stages A–D) were not repeated on Epurun; only the seed stability, cross-seed blend, and production ensemble stages (E–G equivalent) were replicated using the same S11/S04 models.
 
 ---
@@ -436,11 +452,13 @@ Progression:
 8. **Epurun seed stability** (011) — on a second hospital (248 targets, 52 folds), S04 is marginally stronger on central tendency while S11 retains tail-risk advantage, motivating the blend.
 9. **Epurun cross-seed blend robustness** (012) — blend (w=0.55) wins 5/5 seeds, with −4.38% mean MSE improvement and dramatic max fold MSE compression.
 10. **Epurun production ensemble** (013) — confirms blend improvement and tighter seed variance. Error is more dispersed across 248 targets (top 5 ≈ 20% of MSE).
+11. **Cross-hospital skill breakdown** (014) — shows that Hana's positive skill is supported by dense and some sparse drugs, whereas Epurun remains negative even in dense drugs, indicating a much stronger naive baseline.
 
 **Deployment recommendation:**
 - **Hana**: S11/S04 blend at **w=0.55–0.60** (S11-weighted). Any w in [0.50, 0.65] outperforms pure S11 on every seed tested.
 - **Epurun**: S11/S04 blend at **w=0.50–0.55** (balanced-to-S04-leaning). Any w in [0.45, 0.55] outperforms pure S11 on every seed tested.
 - **Fallback**: Pure S11 (Hana) or S04 (Epurun) as single-model baselines if blend infrastructure is unavailable.
+- **Interpretation for Epurun**: the negative skill vs naive is consistent with a highly persistent elderly-care demand pattern in which many drugs are repeated day after day. The next improvement path is targeted modeling of the relatively small set of non-persistent drugs, not expecting broad wins over naive on all 248 targets.
 - The blend improvement (~4–5%) and tail-risk compression are consistent across both hospitals, supporting the generalizability of the ensemble recipe.
 
 ---
@@ -537,6 +555,12 @@ Progression:
 - `report/010_ensemble/hana/ensemble_ci_per_drug.csv`
 - `report/010_ensemble/hana/ensemble_seed_predictions_per_drug.csv`
 - `report/010_ensemble/hana/ensemble_true_vs_pred_ci_per_drug.png`
+- `report/014_skill/hana/014_skill_summary.md`
+- `report/014_skill/hana/skill_by_bucket.csv`
+- `report/014_skill/hana/skill_by_drug.csv`
+- `report/014_skill/hana/skill_by_bucket.png`
+- `report/014_skill/hana/skill_vs_density.png`
+- `report/014_skill/hana/top_bottom_drug_skill.png`
 
 ### Epurun
 
@@ -557,3 +581,9 @@ Progression:
 - `report/013_ensemble/epurun/ensemble_ci_per_drug.csv`
 - `report/013_ensemble/epurun/ensemble_seed_predictions_per_drug.csv`
 - `report/013_ensemble/epurun/ensemble_true_vs_pred_ci_per_drug.png`
+- `report/014_skill/epurun/014_skill_summary.md`
+- `report/014_skill/epurun/skill_by_bucket.csv`
+- `report/014_skill/epurun/skill_by_drug.csv`
+- `report/014_skill/epurun/skill_by_bucket.png`
+- `report/014_skill/epurun/skill_vs_density.png`
+- `report/014_skill/epurun/top_bottom_drug_skill.png`
