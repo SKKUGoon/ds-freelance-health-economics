@@ -1,0 +1,2 @@
+dataset,label,recomputed_mean_of_mean_mse,saved_mean_of_mean_mse,delta_mean_of_mean_mse,recomputed_mean_of_mean_skill,saved_mean_of_mean_skill,delta_mean_of_mean_skill
+hana,blend_w0.55,5.309733751144688,5.309733751144688,0.0,0.15163624723062324,0.1516362462300193,1.0006039330434646e-09

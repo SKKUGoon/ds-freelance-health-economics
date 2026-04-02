@@ -1,152 +1,222 @@
-# LAVAR: Latent Autoencoder VAR for Forecasting (Reference Implementation)
+# LAVAR: Latent Autoencoder VAR for Forecasting
+
+Languages: [English](LAVAR_README.md) | [한국어](LAVAR_README_KOR.md) | [日本語](LAVAR_README_JPN.md)
 
 [![paper](https://img.shields.io/badge/paper-TBD-lightgrey)](#citation)
 [![python](https://img.shields.io/badge/python-%3E%3D3.12-blue)](#installation)
 [![pytorch](https://img.shields.io/badge/PyTorch-%3E%3D2.9.1-ee4c2c)](https://pytorch.org/)
-[![pydantic](https://img.shields.io/badge/Pydantic-%3E%3D2.12.5-e92063)](https://docs.pydantic.dev/)
+[![pydantic](https://img.shields.io/badge/Pydantic-%3E%3D2.0-e92063)](https://docs.pydantic.dev/)
 [![uv](https://img.shields.io/badge/uv-locked-6f42c1)](https://github.com/astral-sh/uv)
 
-This repository contains a minimal, research-oriented PyTorch implementation of **LAVAR** (Latent Autoencoder VAR) and a **two-stage** training procedure for forecasting future “supply” targets from non-supply covariates.
+`lavar` is a compact, research-oriented PyTorch package for multi-step healthcare supply forecasting.
+It implements a two-stage pipeline:
 
-> **Status**: research code (intentionally compact, with a small number of moving parts).
+1. Stage 1 learns a latent representation and latent dynamics from non-supply covariates.
+2. Stage 2 freezes the latent backbone and trains density-split supply heads on future supply targets.
 
-## Overview
+## Public API
 
-Given a multivariate time series of non-supply features \(x_t \in \mathbb{R}^{D_x}\) and supply targets \(y_t \in \mathbb{R}^{D_y}\), LAVAR learns a low-dimensional latent state \(z_t \in \mathbb{R}^k\) such that:
-
-- **Observation model (nonlinear)**: \(x_t \approx g_\theta(z_t)\) via an MLP encoder/decoder.
-- **Latent dynamics (linear)**: \(z_t \approx \sum_{i=1}^{p} A_i z_{t-i}\) (a VAR(\(p\)) model).
-
-Training is **two-stage**:
-
-- **Stage 1 (LAVAR)**: learn encoder/decoder + latent VAR dynamics from \(x\) only, using reconstruction + latent dynamics losses (optionally with multi-step latent supervision).
-- **Stage 2 (Supply head)**: freeze the stage-1 latent model and train a small head to map rolled-out future latents to future supplies \(y_{t+1:t+H}\).
-  - **Density-split heads (recommended)**: split targets into **dense / sparse / ultra-sparse** buckets by nonzero rate and train a separate head per bucket.
-
-For a more formal, implementation-faithful write-up (with LaTeX math and the exact distributions used), see the documents linked below.
-
-* **[`ACADEMIC(ENGLISH).md`](ACADEMIC_ENG.md)**
-* **[`ACADEMIC(KOREAN).md`](ACADEMIC_KOR.md)**
-
-
-## System diagram (Mermaid)
-
-```mermaid
-flowchart TD
-  %% =========================
-  %% Data / windowing
-  %% =========================
-  X["Non-supply features | x: T x Dx"] -->|Rolling window| W["x_past: B x (p+1) x Dx"]
-  X -->|Future supervision-optional| XF["x_future: B x H x Dx"]
-  Y["Supply targets | y: T x Dy"] -->|Future targets| YF["y_future: B x H x Dy"]
-
-  %% =========================
-  %% Stage 1: LAVAR training
-  %% =========================
-  subgraph S1[Stage 1 - Train LAVAR]
-    direction TB
-
-    W -->|Encode each step| ENC["Encoder MLP | Dx -> k"]
-    ENC --> ZSEQ["z_seq: B x (p+1) x k"]
-
-    ZSEQ -->|Use history z_t-p ~ z_t-1| VAR["VAR_p dynamics | A1..Ap"]
-    VAR --> ZP["z_pred: B x k"]
-
-    ZSEQ -->|Current latent z_t| ZT["z_true: B x k"]
-    ZT --> DEC["Decoder MLP | k -> Dx"]
-    DEC --> XH["x_hat: B x Dx"]
-
-    XH --> LREC["Reconstruction loss | MSE(x_hat, x_t)"]
-    ZP --> LDYN["Latent dynamics loss | MSE(z_pred, z_true)"]
-
-    %% optional multi-step latent supervision
-    ZSEQ -->|Optional: encode past p steps| ZH["z_hist: B x p x k"]
-    ZH -->|rollout_latent horizon H| ZR["z_roll: B x H x k"]
-    XF -->|Encode future steps| ZF["z_fut_true: B x H x k"]
-    ZR --> LMS["Multi-step latent loss | MSE(z_roll, z_fut_true)"]
-
-    LREC --> SUM1((Weighted sum))
-    LDYN --> SUM1
-    LMS -.-> SUM1
-    SUM1 --> OPT1["Adam optimizer | updates Encoder/Decoder/VAR"]
-  end
-
-  %% =========================
-  %% Stage 2: Supply head training
-  %% =========================
-  subgraph S2[Stage 2 - Train Supply heads - density split]
-    direction TB
-
-    %% Compute per-target density from y_future on TRAIN windows only
-    YF -->|nonzero_rate per target| DENS["r_j = mean[ y>0 ]"]
-    DENS --> SPLIT["Split indices: dense (r>=thr), sparse (mid), ultra (r<=thr)"]
-
-    %% Shared latent rollout (LAVAR frozen in stage 2)
-    W -->|Use last p steps as history| HIST["x_hist: B x p x Dx"]
-    HIST -->|Encode| ENC2["Encoder MLP (frozen)"]
-    ENC2 --> ZH2["z_hist: B x p x k"]
-    ZH2 -->|rollout_latent H| ZFUT["z_future: B x H x k"]
-
-    %% Dense + sparse buckets: Δy head trained with MSE (separate model per bucket)
-    SPLIT --> D_BKT["Dense bucket: indices J_dense"]
-    SPLIT --> S_BKT["Sparse bucket: indices J_sparse"]
-    D_BKT --> DH["SupplyHeadMSE on J_dense -> predict Δy"]
-    S_BKT --> SH["SupplyHeadMSE on J_sparse -> predict Δy"]
-    ZFUT --> DH
-    ZFUT --> SH
-
-    %% Delta targets use y0 (current y_t) to form increments and integrate back
-    Y --> Y0["y0 = y_t (needed for Δy training)"]
-    DH --> DDELTA["Δy_hat_dense"]
-    SH --> SDELTA["Δy_hat_sparse"]
-    DDELTA --> DINT["Integrate: y_hat = y0 + cumsum(Δy_hat) | clamp_min(0)"]
-    SDELTA --> SINT["Integrate: y_hat = y0 + cumsum(Δy_hat) | clamp_min(0)"]
-    YF --> DMSE["Dense Δy loss: MSE(Δy_hat, Δy_true)"]
-    YF --> SMSE["Sparse Δy loss: MSE(Δy_hat, Δy_true)"]
-
-    %% Ultra bucket: ZINB head trained with NLL (separate model)
-    SPLIT --> U_BKT["Ultra bucket: indices J_ultra"]
-    U_BKT --> UH["SupplyHeadZINB on J_ultra -> predict (pi,mu,theta)"]
-    ZFUT --> UH
-    UH --> UPARAMS["(pi, mu, theta)"]
-    YF --> UNLL["Ultra loss: ZINB NLL"]
-
-    %% All stage-2 optimizers update supply head parameters only; LAVAR is frozen.
-    DMSE --> OPT2["Adam optimizer | updates SupplyHead only | (LAVAR frozen)"]
-    SMSE --> OPT2
-    UNLL --> OPT2
-
-    %% Stitch bucket predictions back into Dy ordering
-    DINT --> STITCH["stitch_bucket_predictions(...)"]
-    SINT --> STITCH
-    UH -->|point forecast uses mu| STITCH
-    STITCH --> YH["y_hat: B x H x Dy"]
-  end
-
-  %% =========================
-  %% Saved artifacts
-  %% =========================
-  S1 --> CK1[[lavar_best.pth]]
-  S2 --> CK2[[lavar_supply_dense_best.pth]]
-  S2 --> CK3[[lavar_supply_sparse_best.pth]]
-  S2 --> CK4[[lavar_supply_ultra_best.pth]]
+```python
+from lavar import LAVARForecaster, LAVARConfig, RollingEvaluator, EvaluationResults
 ```
 
-## Repository layout
+The main entry points are:
 
-- `dataset.py`: `RollingXYDataset` produces `(x_past, x_future, y_future)` rolling windows.
-- `models.py`:
-  - `LAVAR`: encoder/decoder + `VARDynamics`
-  - `LAVARWithSupply`: frozen latent rollout + bucket-specific supply head (NB or ZINB)
-- `dynamics.py`: `VARDynamics` implements linear VAR(\(p\)) latent transitions.
-- `train_stage1.py`: stage-1 optimization (reconstruction + latent dynamics + optional multi-step latent supervision).
-- `train_stage2.py`: stage-2 optimization (freeze `lavar`, train `supply_head` only).
-- `config.py`: `LAVARConfig` hyperparameters.
-- `losses.py`: optional Poisson NLL for nonnegative count-like supplies.
+- `LAVARConfig`: pydantic config for model, training, and inference behavior
+- `LAVARForecaster`: sklearn-style wrapper for `fit()`, `fit_heads()`, `predict()`, `save()`, and `load()`
+- `RollingEvaluator`: rolling-origin evaluation helper
+- `EvaluationResults`: summary object with `to_dataframe()` and `plot()`
+
+## Current Architecture
+
+### Stage 1 backbone
+
+- Observation model: MLP encoder and MLP decoder
+- Latent dynamics: configurable `VAR` or `GRU`
+- Optional encoder augmentation: concatenate supply history to the Stage 1 input when `stage1_use_supply_history=True`
+
+### Stage 2 supply modeling
+
+- Stage 2 modes:
+  - `baseline`: latent rollout only
+  - `supply_history_latent`: latent rollout with supply-history-augmented encoder input
+- Target splitting: dense / sparse / ultra-sparse buckets based on per-target nonzero rate
+- Supported head families:
+  - deterministic delta regression via MLP
+  - deterministic delta regression via GRU decoder
+  - probabilistic NB head
+  - probabilistic ZINB head
+
+### Default pipeline mapping
+
+The current `LAVARForecaster` training pipeline uses density-split Stage 2 heads as follows:
+
+| Bucket | Default head type | Notes |
+| --- | --- | --- |
+| Dense | `delta_mse` | Deterministic delta forecast |
+| Sparse | `delta_mse` | Deterministic delta forecast |
+| Ultra-sparse | `zinb` | Probabilistic count head |
+
+`nb` is supported by the low-level Stage 2 model and trainer APIs, even though the default dispatcher currently routes the ultra-sparse bucket to `zinb`.
+
+## Supported Head Matrix
+
+| Head option | Class path | Backend | Output | Current usage |
+| --- | --- | --- | --- | --- |
+| `delta_mse` | `SupplyHeadMSE` | MLP | per-step `delta` | Default dense/sparse heads |
+| `delta_mse` with `stage2_head_type="gru"` | `SupplyHeadGRU` via `LAVARWithSupplyGRU` | GRU | sequence of `delta` values | Available for baseline-mode delta heads |
+| `nb` | `SupplyHeadNB` | MLP | `mu`, `theta` | Supported low-level option |
+| `zinb` | `SupplyHeadZINB` | MLP | `pi`, `mu`, `theta` | Default ultra-sparse head |
+
+Important implementation details:
+
+- `stage2_head_type="gru"` only affects `delta_mse` heads.
+- `LAVARWithSupplyGRU` is only used for deterministic delta heads.
+- NB and ZINB heads remain pointwise MLP heads.
+- `supply_history_latent` requires both `use_supply_history=True` and `stage1_use_supply_history=True`.
+
+## Training Flow
+
+1. `fit_stage1_shared(X, y)`
+   - scales `X`
+   - optionally scales `y` when Stage 1 consumes supply history
+   - trains `LAVAR` with reconstruction loss and latent dynamics loss
+   - optional multi-step latent supervision compares latent rollouts against encoded future observations
+2. `fit_stage2_private(X, y)`
+   - freezes Stage 1 weights
+   - computes target density buckets on training windows only
+   - trains bucket-specific supply heads
+3. `predict(X_recent, y_recent)`
+   - rolls out future latent states
+   - applies the trained supply heads bucket-wise
+   - runs prediction guardrails, optional zero gating, and optional integer rounding
+
+For delta heads, Stage 2 predicts raw increments and integrates them from the last observed supply value `y0`.
+For probabilistic heads, the default point forecast is the predicted mean `mu`.
+
+## Quickstart
+
+```python
+import numpy as np
+
+from lavar import LAVARConfig, LAVARForecaster, RollingEvaluator
+
+cfg = LAVARConfig(
+    device="cpu",
+    dyn_p=7,
+    horizon=14,
+    latent_dim=8,
+    latent_dynamics_type="gru",
+    stage2_mode="baseline",
+    stage2_head_type="gru",
+    epochs_lavar=5,
+    epochs_supply=5,
+)
+
+T, Dx, Dy = 512, 20, 6
+X = np.random.randn(T, Dx).astype("float32")
+y = np.abs(np.random.randn(T, Dy).astype("float32"))
+
+model = LAVARForecaster(cfg)
+model.fit(X, y)
+
+X_recent = X[-cfg.dyn_p :]
+y_recent = y[-cfg.dyn_p :]
+forecast = model.predict(X_recent, y_recent=y_recent)
+
+model.save("lavar_model.pth")
+loaded = LAVARForecaster.load("lavar_model.pth")
+
+results = RollingEvaluator(cfg).evaluate(X, y, fold_step=14, verbose=False)
+print(results.summary)
+```
+
+Builder-style configuration is also available:
+
+```python
+cfg = (
+    LAVARConfig.builder()
+    .device("cpu")
+    .latent(dim=8, encoder=[32, 16], decoder=[16, 32])
+    .horizon(h=14, history=7)
+    .build()
+)
+```
+
+## Configuration Highlights
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `device` | `"mps"` | Training/inference device |
+| `dyn_p` | `7` | Latent history length / dynamics order |
+| `horizon` | `14` | Forecast horizon |
+| `latent_dim` | `8` | Latent state dimension |
+| `latent_dynamics_type` | `"var"` | Stage 1 latent dynamics: `var` or `gru` |
+| `use_supply_history` | `False` | Concatenate supply history to Stage 2 encoder input |
+| `stage1_use_supply_history` | `False` | Concatenate supply history during Stage 1 training |
+| `stage2_mode` | `"baseline"` | Stage 2 training mode |
+| `stage2_head_type` | `"mlp"` | Baseline-mode delta-head backend: `mlp` or `gru` |
+| `dense_nonzero_rate_thr` | `0.70` | Dense bucket threshold |
+| `ultra_nonzero_rate_thr` | `0.005` | Ultra-sparse bucket threshold |
+| `horizon_loss_weight` | `"uniform"` | Baseline-mode delta loss weighting |
+| `stage2_delta_nonneg_mode` | `"clamp"` | Nonnegative projection for integrated delta forecasts |
+| `pred_guardrail_quantile` | `0.995` | Upper-bound quantile for prediction clipping |
+| `zero_gate_k` | `7` | Zero-gating lookback window |
+| `forecast_round_to_int` | `True` | Round forecasts to integers at inference |
+
+`stage2_use_explicit_lag_coeff` exists in the config as a reserved experimental flag and is not currently consumed by the package.
+
+## Data Contract and Shapes
+
+Training expects aligned time series:
+
+- `X`: shape `(T, Dx)`
+- `y`: shape `(T, Dy)`
+
+Public method shapes:
+
+- `fit(X, y)`: `X: (T, Dx)`, `y: (T, Dy)`
+- `fit_heads(X, y)`: same shapes as `fit()`
+- `predict(X_recent, y_recent)`:
+  - `X_recent`: `(dyn_p, Dx)` or `(dyn_p + 1, Dx)`
+  - `y_recent`: same time length when supply history is enabled; otherwise it is still recommended because delta heads use the most recent observed supply as the integration baseline
+  - returns `np.ndarray` with shape `(horizon, Dy)`
+
+Window datasets:
+
+- `RollingXYDataset`: `(x_past, x_future, y_future)`
+- `RollingXYDatasetWithY0`: `(x_past, x_future, y0, y_future)`
+
+When `use_supply_history=True`, the datasets concatenate `y` columns onto `x_past` and `x_future` so the encoder sees `Dx + Dy` features.
+
+## Package Layout
+
+```text
+lavar/
+├── __init__.py
+├── config.py
+├── forecaster.py
+├── evaluation.py
+├── losses.py
+├── _core/
+│   ├── dynamics.py
+│   ├── heads.py
+│   └── model.py
+├── _data/
+│   ├── dataset.py
+│   └── scaler.py
+└── _training/
+    ├── stage1.py
+    └── stage2/
+        ├── __init__.py
+        ├── common.py
+        ├── stage2_test_baseline.py
+        └── stage2_test_supply_history_latent.py
+```
 
 ## Installation
 
-This repo is intentionally lightweight and uses `pyproject.toml` (Python \(\ge 3.12\)).
+From the repository root:
 
 ### Option A: `uv` (recommended)
 
@@ -154,106 +224,36 @@ This repo is intentionally lightweight and uses `pyproject.toml` (Python \(\ge 3
 uv sync
 ```
 
-### Option B: `pip`
+### Option B: editable install with `pip`
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -U pip
-pip install torch pandas pydantic
+pip install -e .
 ```
 
-## Data contract
+## Checkpoints and Outputs
 
-The training code expects **already-aligned** tensors:
+Default training helpers write these checkpoint names when a save path is provided:
 
-- **Non-supply covariates**: `x` with shape `(T, Dx)`
-- **Supply targets**: `y` with shape `(T, Dy)`
+- `lavar_best.pth`
+- `lavar_supply_dense_best.pth`
+- `lavar_supply_sparse_best.pth`
+- `lavar_supply_ultra_best.pth`
 
-Windowing is handled by `RollingXYDataset`:
+`LAVARForecaster.save(path)` stores the config, scalers, Stage 1 weights, Stage 2 head weights, bucket indices, and prediction guardrail bounds in a single artifact.
 
-- `x_past = x[t-p : t+1]` has shape `(p+1, Dx)` (VAR history + current)
-- `x_future = x[t+1 : t+H+1]` has shape `(H, Dx)` (optional latent rollout supervision)
-- `y_future = y[t+1 : t+H+1]` has shape `(H, Dy)` (stage-2 supervision)
+## Notes and Constraints
 
-## Reproducing the training loop (minimal example)
-
-This repo currently exposes the stage trainers as functions. The snippet below is a minimal end-to-end run on dummy data; swap the dummy tensors for your real, preprocessed time series.
-
-```python
-import torch
-from torch.utils.data import DataLoader, random_split
-
-from config import LAVARConfig
-from dataset import RollingXYDataset, RollingXYDatasetWithY0
-from models import LAVAR, LAVARWithSupply
-from train_stage1 import stage1_train_lavar
-from train_stage2 import stage2_train_supply_density_split
-
-cfg = LAVARConfig(
-    device="cpu",
-    p=7,
-    horizon=14,
-    latent_dim=8,
-    epochs_lavar=5,
-    epochs_supply=5,
-    multi_step_latent_supervision=True,
-)
-
-T, Dx, Dy = 1000, 20, 3
-x = torch.randn(T, Dx)
-y = torch.randn(T, Dy)
-
-ds = RollingXYDataset(x, y, p=cfg.p, horizon=cfg.horizon)
-train_len = int(0.8 * len(ds))
-val_len = len(ds) - train_len
-train_ds, val_ds = random_split(ds, [train_len, val_len])
-
-train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers)
-val_loader = DataLoader(val_ds, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
-
-lavar = LAVAR(
-    input_dim=Dx,
-    latent_dim=cfg.latent_dim,
-    transition_order=cfg.p,
-    encoder_hidden_dims=cfg.encoder_hidden,
-    decoder_hidden_dims=cfg.decoder_hidden,
-)
-stage1_train_lavar(lavar, train_loader, val_loader, cfg)
-
-model = LAVARWithSupply(
-    lavar=lavar,
-    supply_dim=Dy,
-    horizon=cfg.horizon,
-    supply_hidden=cfg.supply_hidden,
-)
-
-# Stage 2 (density split): trains 3 heads (dense=raw Δy w/ MSE, sparse=raw Δy w/ MSE, ultra=ZINB)
-# Note: delta-MSE heads require y0=y[t], so use RollingXYDatasetWithY0 for stage 2 loaders.
-ds2 = RollingXYDatasetWithY0(x, y, p=cfg.p, horizon=cfg.horizon)
-train_ds2, val_ds2 = random_split(ds2, [train_len, val_len])
-train_loader2 = DataLoader(train_ds2, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers)
-val_loader2 = DataLoader(val_ds2, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
-split = stage2_train_supply_density_split(lavar, train_loader2, val_loader2, cfg)
-```
-
-## Outputs / checkpoints
-
-The trainers write checkpoints to the current working directory:
-
-- `lavar_best.pth`: best stage-1 model (by validation loss)
-- `lavar_supply_best.pth`: best stage-2 model (by validation loss)
-
-## Configuration
-
-Hyperparameters live in `config.py` (`LAVARConfig`). Stage 2 is intentionally simple and only supports **density-split training** via:
-
-- **Bucketing**: `dense_nonzero_rate_thr`, `ultra_nonzero_rate_thr`
-- **Training**: `lr_supply`, `epochs_supply`
+- Changing `latent_dim` requires refitting both stages.
+- Changing `dyn_p` requires refitting because the latent dynamics shape changes.
+- Do not unfreeze the Stage 1 `LAVAR` weights during Stage 2 head training.
+- Density bucket indices are part of the trained Stage 2 contract and must stay aligned with the saved head weights.
 
 ## Citation
 
-If you use this code, please cite the associated paper:
+If you use this package, please cite the associated paper:
 
 ```bibtex
 @article{lavar_tbd,
@@ -266,4 +266,4 @@ If you use this code, please cite the associated paper:
 
 ## Acknowledgements
 
-Built with PyTorch; inspired by classic state-space modeling and VAR-style latent dynamics regularization.
+Built with PyTorch and pydantic, with a deliberately small code surface for experimentation on rolling healthcare demand and supply forecasting.

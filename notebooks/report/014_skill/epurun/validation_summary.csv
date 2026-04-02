@@ -1,0 +1,2 @@
+dataset,label,recomputed_mean_of_mean_mse,saved_mean_of_mean_mse,delta_mean_of_mean_mse,recomputed_mean_of_mean_skill,saved_mean_of_mean_skill,delta_mean_of_mean_skill
+epurun,blend_w0.55,0.9195462380361572,0.9195462380361574,-2.220446049250313e-16,-0.10921187846720304,-0.1092118778302146,-6.369884342216636e-10

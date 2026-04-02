@@ -399,8 +399,15 @@ def compute_fold_metrics(
 
     y_naive = y_last.unsqueeze(0).repeat(y_hat.shape[0], 1)
     naive_err = y_naive - y_true
-    naive_mse = (naive_err**2).mean().item()
+    naive_se = naive_err**2
+    naive_mse = naive_se.mean().item()
+    naive_mse_by_target = naive_se.mean(dim=0)
     skill_vs_naive = (1.0 - fold_mse / naive_mse) if naive_mse > 0 else float("nan")
+    skill_vs_naive_by_target = torch.full_like(mse_by_target, float("nan"))
+    valid_skill_mask = naive_mse_by_target > 0
+    skill_vs_naive_by_target[valid_skill_mask] = (
+        1.0 - mse_by_target[valid_skill_mask] / naive_mse_by_target[valid_skill_mask]
+    )
 
     worst_h = int(mse_by_horizon.argmax().item())
     worst_h_mse = mse_by_horizon[worst_h].item()
@@ -422,7 +429,9 @@ def compute_fold_metrics(
         "bias_by_target": bias_by_target,
         "var_by_target": var_by_target,
         "naive_mse": naive_mse,
+        "naive_mse_by_target": naive_mse_by_target,
         "skill_vs_naive": skill_vs_naive,
+        "skill_vs_naive_by_target": skill_vs_naive_by_target,
         "worst_h": worst_h,
         "worst_h_mse": worst_h_mse,
         "worst_targets": worst_targets,
