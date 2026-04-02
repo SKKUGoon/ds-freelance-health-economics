@@ -36,3 +36,6 @@ archive_research1/
 archive_research2/
 qdrant_storage/
 qdrant_storage2/
+
+**/.DS_Store
+.DS_Store
